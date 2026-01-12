@@ -724,4 +724,431 @@ else:
                         count = len(tasks)
                         
                         is_today = "today" if cur_date == today else ""
-                        is_
+                        is_weekend = "weekend" if i >= 5 else ""
+                        
+                        cal_html += f'<td class="{is_today} {is_weekend}">'
+                        cal_html += f'<span class="day-number">{day}</span>'
+                        
+                        if count > 0:
+                            cal_html += f'<span class="task-count">{count}</span>'
+                            for _, t in tasks.iterrows():
+                                color = get_priority_color(t['Priority'])
+                                cal_html += f'<span class="task-indicator" style="background:{color}"></span>'
+                        
+                        cal_html += '</td>'
+                cal_html += "</tr>"
+            
+            cal_html += "</tbody></table></div>"
+            st.markdown(cal_html, unsafe_allow_html=True)
+            
+            st.markdown("""
+                <div style='background: white; padding: 20px; border-radius: 12px; margin-top: 20px;'>
+                    <strong style='font-size: 1.1em;'>🎨 Priority Legend</strong><br><br>
+                    <span style='color: #ef4444; font-size: 1.5em;'>●</span> <strong>Critical</strong> &nbsp;&nbsp;
+                    <span style='color: #f59e0b; font-size: 1.5em;'>●</span> <strong>High</strong> &nbsp;&nbsp;
+                    <span style='color: #3b82f6; font-size: 1.5em;'>●</span> <strong>Medium</strong> &nbsp;&nbsp;
+                    <span style='color: #10b981; font-size: 1.5em;'>●</span> <strong>Low</strong>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col_detail:
+            st.subheader("🔍 Daily Task Overview")
+            picked = st.date_input("Select Date", today, key="cal_picker")
+            
+            df = st.session_state.tasks.copy()
+            df['Due Date'] = pd.to_datetime(df['Due Date']).dt.date
+            filtered = df[df['Due Date'] == picked]
+            
+            if not filtered.empty:
+                st.markdown(f"""
+                    <div style='background: linear-gradient(135deg, #2563eb, #7c3aed); 
+                                padding: 25px; border-radius: 15px; color: white; margin-bottom: 25px;'>
+                        <h2 style='margin: 0; font-size: 1.8em;'>
+                            📋 {len(filtered)} Task(s) on {picked.strftime('%B %d, %Y')}
+                        </h2>
+                        <p style='margin: 10px 0 0 0; opacity: 0.9;'>
+                            {len(filtered.groupby('Owner'))} team member(s) with deliverables
+                        </p>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                for owner, tasks in filtered.groupby('Owner'):
+                    avg_prog = tasks['Progress'].mean()
+                    health, icon, _ = calculate_health(avg_prog)
+                    
+                    st.markdown(f"""
+                        <div class="team-member-card">
+                            <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;'>
+                                <h3 style='margin: 0; color: #1e293b; font-size: 1.3em;'>
+                                    👤 {owner}
+                                </h3>
+                                <div>
+                                    <span style='background: #dbeafe; color: #2563eb; padding: 6px 14px;
+                                                 border-radius: 20px; font-size: 12px; font-weight: 700; margin-right: 8px;'>
+                                        {len(tasks)} TASK(S)
+                                    </span>
+                                    <span style='background: #dcfce7; color: #16a34a; padding: 6px 14px;
+                                                 border-radius: 20px; font-size: 12px; font-weight: 700;'>
+                                        {avg_prog:.0f}% AVG
+                                    </span>
+                                </div>
+                            </div>
+                    """, unsafe_allow_html=True)
+                    
+                    for idx, (_, task) in enumerate(tasks.iterrows(), 1):
+                        pcol = get_priority_color(task['Priority'])
+                        
+                        st.markdown(f"""
+                            <div class="task-card" style='border-left-color: {pcol};'>
+                                <div style='display: flex; justify-content: space-between;'>
+                                    <div style='flex: 1;'>
+                                        <div style='margin-bottom: 12px;'>
+                                            <span style='background: {pcol}; color: white; padding: 4px 12px;
+                                                         border-radius: 14px; font-size: 11px; font-weight: 700;
+                                                         text-transform: uppercase;'>
+                                                {task['Priority']}
+                                            </span>
+                                            <span style='background: #e2e8f0; color: #475569; padding: 4px 12px;
+                                                         border-radius: 14px; font-size: 11px; font-weight: 700;
+                                                         margin-left: 8px; text-transform: uppercase;'>
+                                                {task['Status']}
+                                            </span>
+                                        </div>
+                                        <h4 style='margin: 10px 0; color: #1e293b; font-size: 1.1em;'>
+                                            {idx}. {task['Item']}
+                                        </h4>
+                                        <p style='margin: 8px 0; color: #64748b; font-size: 0.9em;'>
+                                            📄 <strong>ID:</strong> {task['ID']} &nbsp;|&nbsp;
+                                            📂 <strong>Category:</strong> {task.get('Category', 'General')}
+                                        </p>
+                                    </div>
+                                    <div style='text-align: center; min-width: 100px;'>
+                                        <div style='font-size: 2.5em; font-weight: 800; color: {pcol};'>
+                                            {task['Progress']}%
+                                        </div>
+                                        <div style='font-size: 0.75em; color: #64748b; text-transform: uppercase;'>
+                                            Complete
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style='margin-top: 15px; padding-top: 15px; border-top: 2px solid #f1f5f9;'>
+                                    <div style='background: #e2e8f0; height: 10px; border-radius: 10px; overflow: hidden;'>
+                                        <div style='background: linear-gradient(90deg, {pcol}, {pcol}aa);
+                                                    height: 100%; width: {task["Progress"]}%;
+                                                    transition: width 0.5s ease;'></div>
+                                    </div>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                    
+                    st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                    <div style='background: white; padding: 60px; border-radius: 20px;
+                                text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);'>
+                        <div style='font-size: 5em; margin-bottom: 20px;'>📭</div>
+                        <h2 style='color: #64748b; margin: 0;'>No Tasks Scheduled</h2>
+                        <p style='color: #94a3b8; margin-top: 15px; font-size: 1.1em;'>
+                            This day is clear - no deadlines or deliverables
+                        </p>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            # Upcoming
+            st.markdown("---")
+            st.subheader("📌 Next 5 Deadlines")
+            upcoming = df[df['Due Date'] > picked].sort_values('Due Date').head(5)
+            
+            if not upcoming.empty:
+                for _, row in upcoming.iterrows():
+                    days = (row['Due Date'] - picked).days
+                    pcol = get_priority_color(row['Priority'])
+                    st.markdown(f"""
+                        <div style='background: white; padding: 15px; border-radius: 12px;
+                                    margin: 10px 0; border-left: 4px solid {pcol};
+                                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);'>
+                            <strong style='color: {pcol}; font-size: 1.05em;'>{row['Item']}</strong><br>
+                            <small style='color: #64748b;'>
+                                👤 {row['Owner']} &nbsp;•&nbsp;
+                                📅 In {days} day(s) ({row['Due Date'].strftime('%b %d')}) &nbsp;•&nbsp;
+                                📊 {row['Progress']}%
+                            </small>
+                        </div>
+                    """, unsafe_allow_html=True)
+    
+    # ==================== TAB 2: ANALYTICS ====================
+    with tab2:
+        df = st.session_state.tasks.copy()
+        df['Due Date'] = pd.to_datetime(df['Due Date'])
+        
+        # KPIs
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("📋 Total Tasks", len(df), delta=f"{len(df[df['Progress']<100])} active")
+        m2.metric("📈 Avg Progress", f"{df['Progress'].mean():.1f}%")
+        m3.metric("⚠️ Critical Items", len(df[df['Priority']=='Critical']))
+        m4.metric("✅ Completed", len(df[df['Progress']==100]))
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Charts Row 1
+        c1, c2 = st.columns(2)
+        with c1:
+            status = df['Status'].value_counts()
+            fig1 = px.pie(values=status.values, names=status.index,
+                         title="📊 Task Status Distribution", hole=0.5,
+                         color_discrete_sequence=px.colors.qualitative.Bold)
+            fig1.update_traces(textposition='inside', textinfo='percent+label',
+                             textfont_size=14)
+            fig1.update_layout(height=400, showlegend=True)
+            st.plotly_chart(fig1, use_container_width=True)
+        
+        with c2:
+            owner_avg = df.groupby('Owner')['Progress'].mean().sort_values(ascending=True)
+            fig2 = px.bar(x=owner_avg.values, y=owner_avg.index,
+                         title="👥 Team Performance (Avg Progress)",
+                         labels={'x': 'Progress %', 'y': 'Team Member'},
+                         color=owner_avg.values, color_continuous_scale='Viridis')
+            fig2.update_layout(height=400, showlegend=False)
+            st.plotly_chart(fig2, use_container_width=True)
+        
+        # Charts Row 2
+        c3, c4 = st.columns(2)
+        with c3:
+            priority = df['Priority'].value_counts()
+            fig3 = px.bar(x=priority.index, y=priority.values,
+                         title="⚠️ Priority Distribution",
+                         color=priority.index,
+                         color_discrete_map={
+                             'Critical': '#ef4444', 'High': '#f59e0b',
+                             'Medium': '#3b82f6', 'Low': '#10b981'
+                         })
+            fig3.update_layout(height=400, showlegend=False)
+            st.plotly_chart(fig3, use_container_width=True)
+        
+        with c4:
+            category = df.groupby('Category')['Progress'].mean().sort_values(ascending=False)
+            fig4 = px.bar(x=category.index, y=category.values,
+                         title="📂 Progress by Category",
+                         color=category.values, color_continuous_scale='Blues')
+            fig4.update_layout(height=400, showlegend=False)
+            st.plotly_chart(fig4, use_container_width=True)
+        
+        # Gantt
+        st.subheader("🗓️ Project Timeline (Gantt Chart)")
+        df_gantt = df.copy()
+        df_gantt['Start'] = pd.to_datetime(date.today())
+        fig_gantt = px.timeline(df_gantt, x_start='Start', x_end='Due Date',
+                               y='Item', color='Owner', hover_data=['Status', 'Progress'])
+        fig_gantt.update_yaxes(categoryorder='total ascending')
+        fig_gantt.update_layout(height=500)
+        st.plotly_chart(fig_gantt, use_container_width=True)
+    
+    # ==================== TAB 3: MDL ====================
+    with tab3:
+        st.subheader("📋 Master Document List")
+        
+        df_mdl = st.session_state.tasks.copy()
+        
+        # Filters
+        f1, f2, f3, f4 = st.columns(4)
+        with f1:
+            status_f = st.multiselect("Status", df_mdl['Status'].unique(),
+                                     default=df_mdl['Status'].unique())
+        with f2:
+            owner_f = st.multiselect("Owner", df_mdl['Owner'].unique(),
+                                    default=df_mdl['Owner'].unique())
+        with f3:
+            priority_f = st.multiselect("Priority", df_mdl['Priority'].unique(),
+                                       default=df_mdl['Priority'].unique())
+        with f4:
+            category_f = st.multiselect("Category", df_mdl['Category'].unique(),
+                                       default=df_mdl['Category'].unique())
+        
+        filtered = df_mdl[
+            (df_mdl['Status'].isin(status_f)) &
+            (df_mdl['Owner'].isin(owner_f)) &
+            (df_mdl['Priority'].isin(priority_f)) &
+            (df_mdl['Category'].isin(category_f))
+        ]
+        
+        if len(filtered) > 0:
+            st.dataframe(filtered, use_container_width=True, height=400,
+                        column_config={
+                            "Progress": st.column_config.ProgressColumn(
+                                "Progress", format="%d%%", min_value=0, max_value=100),
+                            "Due Date": st.column_config.DateColumn(
+                                "Due Date", format="DD/MM/YYYY")
+                        })
+        else:
+            st.info("No tasks match filters")
+        
+        # Add Task
+        with st.expander("➕ Add New Task"):
+            with st.form("add_task"):
+                c1, c2 = st.columns(2)
+                with c1:
+                    tid = st.text_input("ID", placeholder="DOC-XX")
+                    item = st.text_input("Task Name")
+                    status = st.selectbox("Status", ["Pending", "In Progress",
+                                                     "Technical Evaluation", "Submitted", "Completed"])
+                with c2:
+                    owner = st.selectbox("Owner", st.session_state.team_members)
+                    priority = st.selectbox("Priority", ["Low", "Medium", "High", "Critical"])
+                    category = st.selectbox("Category", ["Engineering", "Procurement",
+                                                         "Construction", "Quality", "Safety"])
+                
+                due = st.date_input("Due Date", min_value=date.today())
+                prog = st.slider("Progress %", 0, 100, 0, 5)
+                
+                if st.form_submit_button("✅ Add Task", use_container_width=True):
+                    if tid and item:
+                        new = {"ID": tid, "Item": item, "Owner": owner, "Status": status,
+                              "Due Date": due, "Progress": prog, "Priority": priority,
+                              "Category": category}
+                        st.session_state.tasks = pd.concat([st.session_state.tasks,
+                                                           pd.DataFrame([new])], ignore_index=True)
+                        log_activity("Task Created", item)
+                        st.success(f"✅ {item} added!")
+                        st.rerun()
+        
+        # Edit Task
+        with st.expander("✏️ Edit Task"):
+            if len(filtered) > 0:
+                edit_id = st.selectbox("Select Task", filtered['ID'].tolist(),
+                                      format_func=lambda x: f"{x} - {filtered[filtered['ID']==x]['Item'].iloc[0]}")
+                task = filtered[filtered['ID'] == edit_id].iloc[0]
+                
+                with st.form("edit_task"):
+                    e1, e2 = st.columns(2)
+                    with e1:
+                        e_owner = st.selectbox("Owner", st.session_state.team_members,
+                                              index=st.session_state.team_members.index(task['Owner']))
+                        e_status = st.selectbox("Status", ["Pending", "In Progress",
+                                                           "Technical Evaluation", "Submitted", "Completed"],
+                                               index=["Pending", "In Progress", "Technical Evaluation",
+                                                     "Submitted", "Completed"].index(task['Status']))
+                    with e2:
+                        e_priority = st.selectbox("Priority", ["Low", "Medium", "High", "Critical"],
+                                                 index=["Low", "Medium", "High", "Critical"].index(task['Priority']))
+                        e_prog = st.slider("Progress", 0, 100, int(task['Progress']), 5)
+                    
+                    if st.form_submit_button("💾 Save", use_container_width=True):
+                        idx = st.session_state.tasks[st.session_state.tasks['ID'] == edit_id].index[0]
+                        st.session_state.tasks.at[idx, 'Owner'] = e_owner
+                        st.session_state.tasks.at[idx, 'Status'] = e_status
+                        st.session_state.tasks.at[idx, 'Priority'] = e_priority
+                        st.session_state.tasks.at[idx, 'Progress'] = e_prog
+                        log_activity("Task Updated", edit_id)
+                        st.success("✅ Updated!")
+                        st.rerun()
+    
+    # ==================== TAB 4: RESOURCES ====================
+    with tab4:
+        st.subheader("👥 Resource Management")
+        
+        df_team = st.session_state.tasks.copy()
+        team_stats = df_team.groupby('Owner').agg({
+            'ID': 'count',
+            'Progress': 'mean'
+        }).reset_index()
+        team_stats.columns = ['Owner', 'Tasks', 'Avg Progress']
+        
+        for _, member in team_stats.iterrows():
+            st.markdown(f"""
+                <div class="team-member-card">
+                    <h3 style='margin: 0 0 15px 0; color: #1e293b;'>
+                        👤 {member['Owner']}
+                    </h3>
+            """, unsafe_allow_html=True)
+            
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Tasks", int(member['Tasks']))
+            c2.metric("Avg Progress", f"{member['Avg Progress']:.1f}%")
+            
+            member_tasks = df_team[df_team['Owner'] == member['Owner']]
+            member_tasks['Due Date'] = pd.to_datetime(member_tasks['Due Date'])
+            overdue = len(member_tasks[
+                (member_tasks['Due Date'] < pd.Timestamp(date.today())) &
+                (member_tasks['Progress'] < 100)
+            ])
+            c3.metric("Overdue", overdue, delta="Attention" if overdue > 0 else "Clear")
+            
+            critical = len(member_tasks[member_tasks['Priority'] == 'Critical'])
+            c4.metric("Critical", critical)
+            
+            st.dataframe(member_tasks[['ID', 'Item', 'Status', 'Progress', 'Due Date', 'Priority']],
+                        use_container_width=True, hide_index=True)
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+    
+    # ==================== TAB 5: REPORTS ====================
+    with tab5:
+        st.subheader("📈 Executive Summary & Insights")
+        
+        df_rep = st.session_state.tasks.copy()
+        df_rep['Due Date'] = pd.to_datetime(df_rep['Due Date'])
+        
+        # Summary
+        st.markdown(f"""
+            <div style='background: linear-gradient(135deg, #2563eb, #7c3aed);
+                        padding: 40px; border-radius: 20px; color: white; margin-bottom: 30px;'>
+                <h2 style='margin: 0 0 20px 0;'>📊 Project Health Dashboard</h2>
+                <div style='display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;'>
+                    <div>
+                        <div style='font-size: 2.5em; font-weight: 800;'>{proj['progress']}%</div>
+                        <div style='opacity: 0.9;'>Overall Progress</div>
+                    </div>
+                    <div>
+                        <div style='font-size: 2.5em; font-weight: 800;'>{len(df_rep)}</div>
+                        <div style='opacity: 0.9;'>Total Deliverables</div>
+                    </div>
+                    <div>
+                        <div style='font-size: 2.5em; font-weight: 800;'>{len(st.session_state.team_members)}</div>
+                        <div style='opacity: 0.9;'>Team Members</div>
+                    </div>
+                    <div>
+                        <div style='font-size: 2.5em; font-weight: 800;'>{(proj['end']-date.today()).days}</div>
+                        <div style='opacity: 0.9;'>Days Remaining</div>
+                    </div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Key Insights
+        st.markdown("### 🔍 Key Insights")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.info(f"**📌 Top Performer:** {df_rep.groupby('Owner')['Progress'].mean().idxmax()} "
+                   f"with {df_rep.groupby('Owner')['Progress'].mean().max():.1f}% avg progress")
+            
+            overdue_all = len(df_rep[(df_rep['Due Date'] < pd.Timestamp(date.today())) &
+                                     (df_rep['Progress'] < 100)])
+            if overdue_all > 0:
+                st.warning(f"⚠️ **{overdue_all} overdue tasks** require immediate attention")
+            else:
+                st.success("✅ No overdue tasks - project on track!")
+        
+        with col2:
+            critical_count = len(df_rep[df_rep['Priority'] == 'Critical'])
+            st.error(f"🔴 **{critical_count} critical priority items** in pipeline")
+            
+            next_week = df_rep[df_rep['Due Date'] <= pd.Timestamp(date.today() + timedelta(days=7))]
+            st.warning(f"📅 **{len(next_week)} tasks due** within next 7 days")
+        
+        # Activity Log
+        if st.session_state.activity_log:
+            st.markdown("### 📜 Recent Activity")
+            for log in reversed(st.session_state.activity_log[-10:]):
+                st.text(f"{log['timestamp'].strftime('%Y-%m-%d %H:%M')} - {log['action']}: {log['details']}")
+
+# Footer
+st.markdown("<br><hr style='border-color: rgba(0,0,0,0.1);'>", unsafe_allow_html=True)
+st.markdown("""
+    <center style='color: #64748b; padding: 30px;'>
+        <div style='font-size: 2em; margin-bottom: 15px;'>⚡</div>
+        <strong style='font-size: 1.2em;'>Elsewedy Electric - Engineering Control Platform</strong><br>
+        <small style='opacity: 0.7;'>Enterprise EPC Project Management System • v5.0 Ultimate Edition</small><br>
+        <small style='opacity: 0.7;'>© 2026 Elsewedy Electric. All Rights Reserved.</small>
+    </center>
+""", unsafe_allow_html=True)
