@@ -384,7 +384,7 @@ else:
     with tab1:
         st.subheader("📅 Interactive Project Calendar")
         
-        col_c1, col_c2 = st.columns([3, 2])
+        col_c1, col_c2 = st.columns([2, 3])
         
         with col_c1:
             today = date.today()
@@ -395,50 +395,271 @@ else:
             # إنشاء التقويم
             cal = calendar.monthcalendar(2026, month_idx)
             
-            # تحويل إلى DataFrame للعرض
-            cal_df = pd.DataFrame(
-                cal,
-                columns=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-            )
-            cal_df = cal_df.replace(0, "")
+            # تحضير البيانات للتقويم
+            df_cal = st.session_state.tasks.copy()
+            if 'Priority' not in df_cal.columns:
+                df_cal['Priority'] = 'Medium'
+            df_cal['Due Date'] = pd.to_datetime(df_cal['Due Date']).dt.date
             
-            st.dataframe(
-                cal_df,
-                use_container_width=True,
-                height=300
-            )
+            # إنشاء HTML للتقويم التفاعلي
+            calendar_html = """
+            <style>
+            .calendar-container {
+                background: white;
+                padding: 20px;
+                border-radius: 15px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            }
+            .calendar-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 15px;
+            }
+            .calendar-table th {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 12px;
+                text-align: center;
+                font-weight: 600;
+                font-size: 14px;
+            }
+            .calendar-table td {
+                padding: 15px;
+                text-align: center;
+                border: 1px solid #e0e0e0;
+                cursor: pointer;
+                transition: all 0.3s;
+                position: relative;
+                height: 60px;
+                vertical-align: top;
+            }
+            .calendar-table td:hover {
+                background: #f0f0ff;
+                transform: scale(1.05);
+                box-shadow: 0 4px 10px rgba(102, 126, 234, 0.3);
+            }
+            .day-number {
+                font-weight: 600;
+                font-size: 16px;
+                color: #333;
+            }
+            .task-indicator {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                display: inline-block;
+                margin: 2px;
+            }
+            .task-count {
+                position: absolute;
+                top: 5px;
+                right: 5px;
+                background: #ef4444;
+                color: white;
+                border-radius: 10px;
+                padding: 2px 6px;
+                font-size: 10px;
+                font-weight: 600;
+            }
+            .empty-day {
+                background: #f9f9f9;
+            }
+            .today {
+                background: #fff3cd !important;
+                border: 2px solid #ffc107 !important;
+            }
+            </style>
+            <div class="calendar-container">
+            <table class="calendar-table">
+            <thead>
+            <tr>
+                <th>Mon</th>
+                <th>Tue</th>
+                <th>Wed</th>
+                <th>Thu</th>
+                <th>Fri</th>
+                <th>Sat</th>
+                <th>Sun</th>
+            </tr>
+            </thead>
+            <tbody>
+            """
+            
+            # ملء التقويم
+            for week in cal:
+                calendar_html += "<tr>"
+                for day in week:
+                    if day == 0:
+                        calendar_html += '<td class="empty-day"></td>'
+                    else:
+                        current_date = date(2026, month_idx, day)
+                        tasks_on_day = df_cal[df_cal['Due Date'] == current_date]
+                        task_count = len(tasks_on_day)
+                        
+                        is_today = "today" if current_date == today else ""
+                        
+                        calendar_html += f'<td class="{is_today}">'
+                        calendar_html += f'<div class="day-number">{day}</div>'
+                        
+                        if task_count > 0:
+                            calendar_html += f'<span class="task-count">{task_count}</span>'
+                            # إضافة مؤشرات ملونة حسب الأولوية
+                            for _, task in tasks_on_day.iterrows():
+                                color = get_priority_color(task.get('Priority', 'Medium'))
+                                calendar_html += f'<span class="task-indicator" style="background: {color};"></span>'
+                        
+                        calendar_html += '</td>'
+                calendar_html += "</tr>"
+            
+            calendar_html += """
+            </tbody>
+            </table>
+            </div>
+            """
+            
+            st.markdown(calendar_html, unsafe_allow_html=True)
+            
+            # دليل الألوان
+            st.markdown("""
+                <div style='background: white; padding: 15px; border-radius: 10px; margin-top: 15px;'>
+                    <strong>🎨 Priority Legend:</strong><br>
+                    <span style='color: #ef4444;'>●</span> Critical &nbsp;
+                    <span style='color: #f59e0b;'>●</span> High &nbsp;
+                    <span style='color: #3b82f6;'>●</span> Medium &nbsp;
+                    <span style='color: #10b981;'>●</span> Low
+                </div>
+            """, unsafe_allow_html=True)
         
         with col_c2:
-            st.markdown("#### 🔍 Daily Task Filter")
-            picked_day = st.date_input("Select Date", today)
+            st.markdown("#### 🔍 Daily Task Details")
+            picked_day = st.date_input("📅 Select Date to View Tasks", today, key="day_picker")
             
             # فلترة المهام حسب التاريخ
             df = st.session_state.tasks.copy()
+            if 'Priority' not in df.columns:
+                df['Priority'] = 'Medium'
             df['Due Date'] = pd.to_datetime(df['Due Date']).dt.date
             
             filtered = df[df['Due Date'] == picked_day]
             
             if not filtered.empty:
-                st.success(f"**{len(filtered)} task(s) due on this date:**")
-                for _, row in filtered.iterrows():
-                    priority_color = get_priority_color(row['Priority'])
+                st.markdown(f"""
+                    <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                padding: 15px; border-radius: 10px; color: white; margin-bottom: 20px;'>
+                        <h3 style='margin: 0; color: white;'>📋 {len(filtered)} Task(s) on {picked_day.strftime('%B %d, %Y')}</h3>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                # تجميع المهام حسب الشخص
+                team_tasks = filtered.groupby('Owner')
+                
+                for owner, tasks in team_tasks:
+                    # عدد المهام لكل شخص
+                    task_count = len(tasks)
+                    avg_progress = tasks['Progress'].mean()
+                    
+                    # كارد لكل شخص
                     st.markdown(f"""
-                        <div style='background: white; padding: 15px; border-radius: 10px; 
-                                    margin: 10px 0; border-left: 4px solid {priority_color};'>
-                            <strong style='color: {priority_color};'>{row['ID']}</strong> - {row['Item']}<br>
-                            <small>👤 {row['Owner']} | Status: {row['Status']}</small>
+                        <div style='background: white; padding: 20px; border-radius: 15px; 
+                                    margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                                    border-left: 5px solid #667eea;'>
+                            <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;'>
+                                <h3 style='margin: 0; color: #667eea;'>👤 {owner}</h3>
+                                <div>
+                                    <span style='background: #e0e7ff; color: #667eea; padding: 5px 12px; 
+                                                 border-radius: 20px; font-size: 12px; font-weight: 600;'>
+                                        {task_count} Task(s)
+                                    </span>
+                                    <span style='background: #dcfce7; color: #16a34a; padding: 5px 12px; 
+                                                 border-radius: 20px; font-size: 12px; font-weight: 600; margin-left: 8px;'>
+                                        {avg_progress:.0f}% Avg Progress
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                     """, unsafe_allow_html=True)
+                    
+                    # عرض كل تاسك للشخص
+                    for idx, (_, task) in enumerate(tasks.iterrows(), 1):
+                        priority_color = get_priority_color(task.get('Priority', 'Medium'))
+                        status_color = {
+                            'Completed': '#10b981',
+                            'In Progress': '#3b82f6',
+                            'Pending': '#f59e0b',
+                            'Technical Evaluation': '#8b5cf6',
+                            'Submitted': '#06b6d4'
+                        }.get(task['Status'], '#6b7280')
+                        
+                        st.markdown(f"""
+                            <div style='background: #f8fafc; padding: 18px; border-radius: 12px; 
+                                        margin: 12px 0; border-left: 4px solid {priority_color};
+                                        transition: all 0.3s;'>
+                                <div style='display: flex; justify-content: space-between; align-items: start;'>
+                                    <div style='flex: 1;'>
+                                        <div style='margin-bottom: 8px;'>
+                                            <span style='background: {priority_color}; color: white; padding: 3px 10px; 
+                                                         border-radius: 12px; font-size: 11px; font-weight: 600;'>
+                                                {task.get('Priority', 'Medium')}
+                                            </span>
+                                            <span style='background: {status_color}; color: white; padding: 3px 10px; 
+                                                         border-radius: 12px; font-size: 11px; font-weight: 600; margin-left: 6px;'>
+                                                {task['Status']}
+                                            </span>
+                                        </div>
+                                        <h4 style='margin: 8px 0; color: #1e293b; font-size: 16px;'>
+                                            {idx}. {task['Item']}
+                                        </h4>
+                                        <p style='margin: 5px 0; color: #64748b; font-size: 13px;'>
+                                            📄 <strong>ID:</strong> {task['ID']}
+                                        </p>
+                                    </div>
+                                    <div style='text-align: right; min-width: 80px;'>
+                                        <div style='font-size: 28px; font-weight: 700; color: {priority_color};'>
+                                            {task['Progress']}%
+                                        </div>
+                                        <div style='font-size: 11px; color: #64748b;'>Progress</div>
+                                    </div>
+                                </div>
+                                <div style='margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0;'>
+                                    <div style='background: #e2e8f0; height: 8px; border-radius: 10px; overflow: hidden;'>
+                                        <div style='background: {priority_color}; height: 100%; width: {task["Progress"]}%; 
+                                                    transition: width 0.3s;'></div>
+                                    </div>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                
             else:
-                st.info("✅ No deadlines for this date")
+                st.markdown("""
+                    <div style='background: white; padding: 40px; border-radius: 15px; 
+                                text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.05);'>
+                        <div style='font-size: 64px; margin-bottom: 15px;'>📭</div>
+                        <h3 style='color: #64748b; margin: 0;'>No Tasks Scheduled</h3>
+                        <p style='color: #94a3b8; margin-top: 10px;'>This day is clear - no deadlines!</p>
+                    </div>
+                """, unsafe_allow_html=True)
             
             # عرض المهام القادمة
+            st.markdown("---")
             st.markdown("#### 📌 Upcoming Deadlines")
             upcoming = df[df['Due Date'] > picked_day].sort_values('Due Date').head(5)
             
-            for _, row in upcoming.iterrows():
-                days_until = (row['Due Date'] - picked_day).days
-                st.warning(f"**{row['Item']}** - in {days_until} days")
+            if not upcoming.empty:
+                for _, row in upcoming.iterrows():
+                    days_until = (row['Due Date'] - picked_day).days
+                    priority_color = get_priority_color(row.get('Priority', 'Medium'))
+                    
+                    st.markdown(f"""
+                        <div style='background: white; padding: 12px; border-radius: 8px; 
+                                    margin: 8px 0; border-left: 3px solid {priority_color};'>
+                            <strong style='color: {priority_color};'>{row['Item']}</strong><br>
+                            <small style='color: #64748b;'>
+                                👤 {row['Owner']} • 📅 in {days_until} day(s) • {row['Due Date'].strftime('%b %d')}
+                            </small>
+                        </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("No upcoming deadlines")
 
     # --- Tab 2: لوحة التحليلات ---
     with tab2:
