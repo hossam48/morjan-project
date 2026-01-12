@@ -443,20 +443,25 @@ else:
     # --- Tab 2: لوحة التحليلات ---
     with tab2:
         df = st.session_state.tasks.copy()
+        
+        # التأكد من وجود جميع الأعمدة المطلوبة
+        if 'Priority' not in df.columns:
+            df['Priority'] = 'Medium'
+        
         df['Due Date'] = pd.to_datetime(df['Due Date'])
         
         # Metrics Row
         m1, m2, m3, m4 = st.columns(4)
         
         total_tasks = len(df)
-        avg_progress = df['Progress'].mean()
+        avg_progress = df['Progress'].mean() if len(df) > 0 else 0
         completed_tasks = len(df[df['Progress'] == 100])
         health, health_icon = calculate_project_health(avg_progress, df)
         
         m1.metric("Total Deliverables", total_tasks, delta=f"{completed_tasks} completed")
         m2.metric("Average Progress", f"{avg_progress:.1f}%")
         m3.metric("Project Health", f"{health_icon} {health}")
-        m4.metric("Team Members", df['Owner'].nunique())
+        m4.metric("Team Members", df['Owner'].nunique() if len(df) > 0 else 0)
         
         st.markdown("---")
         
@@ -465,140 +470,170 @@ else:
         
         with c1:
             # Pie Chart للحالات
-            status_counts = df['Status'].value_counts()
-            fig_pie = px.pie(
-                values=status_counts.values,
-                names=status_counts.index,
-                title="📊 Task Status Distribution",
-                hole=0.4,
-                color_discrete_sequence=px.colors.qualitative.Set3
-            )
-            fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-            st.plotly_chart(fig_pie, use_container_width=True)
+            if len(df) > 0:
+                status_counts = df['Status'].value_counts()
+                fig_pie = px.pie(
+                    values=status_counts.values,
+                    names=status_counts.index,
+                    title="📊 Task Status Distribution",
+                    hole=0.4,
+                    color_discrete_sequence=px.colors.qualitative.Set3
+                )
+                fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+                st.plotly_chart(fig_pie, use_container_width=True)
+            else:
+                st.info("No data available for status distribution")
         
         with c2:
             # Bar Chart للموارد
-            fig_bar = px.bar(
-                df.groupby('Owner')['Progress'].mean().reset_index(),
-                x='Owner',
-                y='Progress',
-                title="👥 Team Performance (Avg Progress)",
-                color='Progress',
-                color_continuous_scale='Viridis'
-            )
-            fig_bar.update_layout(showlegend=False)
-            st.plotly_chart(fig_bar, use_container_width=True)
+            if len(df) > 0:
+                owner_progress = df.groupby('Owner', as_index=False)['Progress'].mean()
+                fig_bar = px.bar(
+                    owner_progress,
+                    x='Owner',
+                    y='Progress',
+                    title="👥 Team Performance (Avg Progress)",
+                    color='Progress',
+                    color_continuous_scale='Viridis'
+                )
+                fig_bar.update_layout(showlegend=False)
+                st.plotly_chart(fig_bar, use_container_width=True)
+            else:
+                st.info("No data available for team performance")
         
         # Charts Row 2
         c3, c4 = st.columns(2)
         
         with c3:
             # Priority Distribution
-            priority_counts = df['Priority'].value_counts()
-            fig_priority = px.bar(
-                x=priority_counts.index,
-                y=priority_counts.values,
-                title="⚠️ Task Priority Distribution",
-                labels={'x': 'Priority', 'y': 'Count'},
-                color=priority_counts.index,
-                color_discrete_map={
-                    'Critical': '#ef4444',
-                    'High': '#f59e0b',
-                    'Medium': '#3b82f6',
-                    'Low': '#10b981'
-                }
-            )
-            st.plotly_chart(fig_priority, use_container_width=True)
+            if len(df) > 0 and 'Priority' in df.columns:
+                priority_counts = df['Priority'].value_counts()
+                fig_priority = px.bar(
+                    x=priority_counts.index,
+                    y=priority_counts.values,
+                    title="⚠️ Task Priority Distribution",
+                    labels={'x': 'Priority', 'y': 'Count'},
+                    color=priority_counts.index,
+                    color_discrete_map={
+                        'Critical': '#ef4444',
+                        'High': '#f59e0b',
+                        'Medium': '#3b82f6',
+                        'Low': '#10b981'
+                    }
+                )
+                st.plotly_chart(fig_priority, use_container_width=True)
+            else:
+                st.info("No priority data available")
         
         with c4:
             # Progress Timeline
-            df_sorted = df.sort_values('Due Date')
-            fig_timeline = px.scatter(
-                df_sorted,
-                x='Due Date',
-                y='Progress',
-                size='Progress',
-                color='Status',
-                hover_data=['Item', 'Owner'],
-                title="📈 Progress Timeline"
-            )
-            st.plotly_chart(fig_timeline, use_container_width=True)
+            if len(df) > 0:
+                df_sorted = df.sort_values('Due Date')
+                fig_timeline = px.scatter(
+                    df_sorted,
+                    x='Due Date',
+                    y='Progress',
+                    size='Progress',
+                    color='Status',
+                    hover_data=['Item', 'Owner'],
+                    title="📈 Progress Timeline"
+                )
+                st.plotly_chart(fig_timeline, use_container_width=True)
+            else:
+                st.info("No timeline data available")
         
         # Gantt Chart
         st.subheader("🗓️ Project Roadmap (Gantt Chart)")
-        df_gantt = df.copy()
-        df_gantt['Start'] = pd.to_datetime(date.today())
-        
-        fig_gantt = px.timeline(
-            df_gantt,
-            x_start='Start',
-            x_end='Due Date',
-            y='Item',
-            color='Owner',
-            title="Project Timeline",
-            hover_data=['Status', 'Progress']
-        )
-        fig_gantt.update_yaxes(categoryorder='total ascending')
-        st.plotly_chart(fig_gantt, use_container_width=True)
+        if len(df) > 0:
+            df_gantt = df.copy()
+            df_gantt['Start'] = pd.to_datetime(date.today())
+            
+            fig_gantt = px.timeline(
+                df_gantt,
+                x_start='Start',
+                x_end='Due Date',
+                y='Item',
+                color='Owner',
+                title="Project Timeline",
+                hover_data=['Status', 'Progress']
+            )
+            fig_gantt.update_yaxes(categoryorder='total ascending')
+            st.plotly_chart(fig_gantt, use_container_width=True)
+        else:
+            st.info("No tasks available for Gantt chart")
 
     # --- Tab 3: قائمة المستندات الرئيسية ---
     with tab3:
         st.subheader("📋 Master Document List (MDL)")
         
+        # نسخ DataFrame وإضافة Priority إذا لم تكن موجودة
+        df_mdl = st.session_state.tasks.copy()
+        if 'Priority' not in df_mdl.columns:
+            df_mdl['Priority'] = 'Medium'
+        
         # فلاتر
         col_f1, col_f2, col_f3 = st.columns(3)
         
         with col_f1:
+            status_options = df_mdl['Status'].unique().tolist() if len(df_mdl) > 0 else []
             status_filter = st.multiselect(
                 "Filter by Status",
-                options=df['Status'].unique(),
-                default=df['Status'].unique()
+                options=status_options,
+                default=status_options
             )
         
         with col_f2:
+            owner_options = df_mdl['Owner'].unique().tolist() if len(df_mdl) > 0 else []
             owner_filter = st.multiselect(
                 "Filter by Owner",
-                options=df['Owner'].unique(),
-                default=df['Owner'].unique()
+                options=owner_options,
+                default=owner_options
             )
         
         with col_f3:
+            priority_options = df_mdl['Priority'].unique().tolist() if len(df_mdl) > 0 else []
             priority_filter = st.multiselect(
                 "Filter by Priority",
-                options=df['Priority'].unique(),
-                default=df['Priority'].unique()
+                options=priority_options,
+                default=priority_options
             )
         
         # تطبيق الفلاتر
-        filtered_df = df[
-            (df['Status'].isin(status_filter)) &
-            (df['Owner'].isin(owner_filter)) &
-            (df['Priority'].isin(priority_filter))
+        filtered_df = df_mdl[
+            (df_mdl['Status'].isin(status_filter)) &
+            (df_mdl['Owner'].isin(owner_filter)) &
+            (df_mdl['Priority'].isin(priority_filter))
         ]
         
         # عرض الجدول
-        st.dataframe(
-            filtered_df,
-            use_container_width=True,
-            height=400,
-            column_config={
-                "Progress": st.column_config.ProgressColumn(
-                    "Progress",
-                    format="%d%%",
-                    min_value=0,
-                    max_value=100,
-                ),
-                "Due Date": st.column_config.DateColumn(
-                    "Due Date",
-                    format="DD/MM/YYYY"
-                )
-            }
-        )
+        if len(filtered_df) > 0:
+            st.dataframe(
+                filtered_df,
+                use_container_width=True,
+                height=400,
+                column_config={
+                    "Progress": st.column_config.ProgressColumn(
+                        "Progress",
+                        format="%d%%",
+                        min_value=0,
+                        max_value=100,
+                    ),
+                    "Due Date": st.column_config.DateColumn(
+                        "Due Date",
+                        format="DD/MM/YYYY"
+                    )
+                }
+            )
+        else:
+            st.info("No tasks match the selected filters")
         
         # إضافة مهمة جديدة
         with st.expander("➕ Add New Document / Task"):
             with st.form("mdl_form", clear_on_submit=True):
                 cx, cy = st.columns(2)
+                
+                # الحصول على القائمة الحالية للمالكين
+                current_owners = df_mdl['Owner'].unique().tolist() if len(df_mdl) > 0 else ["Hossam Atta", "Omar Fathy", "Mokhtar Mostafa"]
                 
                 with cx:
                     t_id = st.text_input("Document ID", placeholder="e.g., DOC-03")
@@ -606,7 +641,7 @@ else:
                     t_status = st.selectbox("Status", ["Pending", "In Progress", "Technical Evaluation", "Submitted", "Completed"])
                 
                 with cy:
-                    t_owner = st.selectbox("Owner", df['Owner'].unique().tolist())
+                    t_owner = st.selectbox("Owner", current_owners)
                     t_priority = st.selectbox("Priority", ["Low", "Medium", "High", "Critical"])
                     t_due = st.date_input("Deadline Date", min_value=date.today())
                 
@@ -638,41 +673,55 @@ else:
     with tab4:
         st.subheader("👥 Team Resources & Workload")
         
-        # تحليل الفريق
-        team_stats = df.groupby('Owner').agg({
-            'ID': 'count',
-            'Progress': 'mean'
-        }).reset_index()
-        team_stats.columns = ['Owner', 'Total Tasks', 'Avg Progress']
+        # نسخ DataFrame وإضافة Priority إذا لم تكن موجودة
+        df_team = st.session_state.tasks.copy()
+        if 'Priority' not in df_team.columns:
+            df_team['Priority'] = 'Medium'
         
-        # عرض إحصائيات الفريق
-        for _, member in team_stats.iterrows():
-            with st.container():
-                st.markdown(f"""
-                    <div style='background: white; padding: 20px; border-radius: 12px; 
-                                margin: 10px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1);'>
-                        <h3 style='margin: 0; color: #667eea;'>👤 {member['Owner']}</h3>
-                    </div>
-                """, unsafe_allow_html=True)
-                
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Assigned Tasks", int(member['Total Tasks']))
-                c2.metric("Average Progress", f"{member['Avg Progress']:.1f}%")
-                
-                # حساب المهام المتأخرة
-                member_tasks = df[df['Owner'] == member['Owner']]
-                overdue = len(member_tasks[
-                    (member_tasks['Due Date'] < pd.Timestamp(date.today())) &
-                    (member_tasks['Progress'] < 100)
-                ])
-                c3.metric("Overdue Tasks", overdue, delta="Needs attention" if overdue > 0 else "On track")
-                
-                # عرض مهام العضو
-                st.dataframe(
-                    member_tasks[['ID', 'Item', 'Status', 'Progress', 'Due Date', 'Priority']],
-                    use_container_width=True,
-                    hide_index=True
-                )
+        if len(df_team) > 0:
+            # تحليل الفريق
+            team_stats = df_team.groupby('Owner', as_index=False).agg({
+                'ID': 'count',
+                'Progress': 'mean'
+            })
+            team_stats.columns = ['Owner', 'Total Tasks', 'Avg Progress']
+            
+            # عرض إحصائيات الفريق
+            for _, member in team_stats.iterrows():
+                with st.container():
+                    st.markdown(f"""
+                        <div style='background: white; padding: 20px; border-radius: 12px; 
+                                    margin: 10px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1);'>
+                            <h3 style='margin: 0; color: #667eea;'>👤 {member['Owner']}</h3>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Assigned Tasks", int(member['Total Tasks']))
+                    c2.metric("Average Progress", f"{member['Avg Progress']:.1f}%")
+                    
+                    # حساب المهام المتأخرة
+                    member_tasks = df_team[df_team['Owner'] == member['Owner']].copy()
+                    member_tasks['Due Date'] = pd.to_datetime(member_tasks['Due Date'])
+                    
+                    overdue = len(member_tasks[
+                        (member_tasks['Due Date'] < pd.Timestamp(date.today())) &
+                        (member_tasks['Progress'] < 100)
+                    ])
+                    c3.metric("Overdue Tasks", overdue, delta="Needs attention" if overdue > 0 else "On track")
+                    
+                    # عرض مهام العضو
+                    display_cols = ['ID', 'Item', 'Status', 'Progress', 'Due Date']
+                    if 'Priority' in member_tasks.columns:
+                        display_cols.append('Priority')
+                    
+                    st.dataframe(
+                        member_tasks[display_cols],
+                        use_container_width=True,
+                        hide_index=True
+                    )
+        else:
+            st.info("No team data available. Add tasks to see team statistics.")
 
 # --- Footer ---
 st.markdown("<br><hr>", unsafe_allow_html=True)
