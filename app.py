@@ -268,6 +268,8 @@ def initialize_session_state():
                 "Priority": "Critical"
             }
         ])
+        # --- FIX: تحويل التواريخ إلى Timestamp لضمان الاتساق ---
+        st.session_state.tasks['Due Date'] = pd.to_datetime(st.session_state.tasks['Due Date'])
 
 initialize_session_state()
 
@@ -308,8 +310,8 @@ if st.session_state.current_project is None:
     # Header مع animation
     st.markdown("""
         <div style='text-align: center; padding: 40px 0;'>
-            <h1 style='font-size: 3.5em; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                       -webkit-background-clip: text; -webkit-text-fill-color: transparent; 
+            <h1 style='font-size: 3.5em; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);  
+                       -webkit-background-clip: text; -webkit-text-fill-color: transparent;  
                        font-weight: 800; margin-bottom: 10px;'>
                 🏗️ Elsewedy Electric
             </h1>
@@ -422,7 +424,7 @@ else:
 
     # Header الصفحة
     st.markdown(f"""
-        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);  
                     padding: 30px; border-radius: 15px; margin-bottom: 30px; color: white;'>
             <h1 style='margin: 0; color: white;'>🚀 {st.session_state.current_project}</h1>
             <p style='margin: 10px 0 0 0; font-size: 1.2em; opacity: 0.9;'>Control Center & Analytics Dashboard</p>
@@ -446,17 +448,27 @@ else:
         with col_c1:
             today = date.today()
             months = list(calendar.month_name)[1:]
-            sel_month = st.selectbox("Select Month", months, index=today.month - 1)
+            
+            # --- FIX: إضافة اختيار السنة ---
+            col_year, col_month = st.columns([1, 2])
+            with col_year:
+                # السنة الافتراضية 2026 كما في الكود الأصلي، ولكن قابلة للتعديل
+                sel_year = st.number_input("Year", min_value=2020, max_value=2030, value=2026, step=1)
+            with col_month:
+                sel_month = st.selectbox("Select Month", months, index=today.month - 1)
+            
             month_idx = months.index(sel_month) + 1
             
-            # إنشاء التقويم
-            cal = calendar.monthcalendar(2026, month_idx)
+            # إنشاء التقويم باستخدام السنة والشهر المختارين
+            cal = calendar.monthcalendar(sel_year, month_idx)
             
             # تحضير البيانات للتقويم
             df_cal = st.session_state.tasks.copy()
             if 'Priority' not in df_cal.columns:
                 df_cal['Priority'] = 'Medium'
-            df_cal['Due Date'] = pd.to_datetime(df_cal['Due Date']).dt.date
+            
+            # --- FIX: استخدام .dt.date للمقارنة مع كائنات date الخاصة ببايثون ---
+            df_cal['Due Date Only'] = df_cal['Due Date'].dt.date
             
             # إنشاء HTML للتقويم التفاعلي
             calendar_html = """
@@ -549,8 +561,9 @@ else:
                     if day == 0:
                         calendar_html += '<td class="empty-day"></td>'
                     else:
-                        current_date = date(2026, month_idx, day)
-                        tasks_on_day = df_cal[df_cal['Due Date'] == current_date]
+                        current_date = date(sel_year, month_idx, day)
+                        # --- FIX: الفلترة باستخدام عمود التاريخ المحول ---
+                        tasks_on_day = df_cal[df_cal['Due Date Only'] == current_date]
                         task_count = len(tasks_on_day)
                         
                         is_today = "today" if current_date == today else ""
@@ -595,13 +608,14 @@ else:
             df = st.session_state.tasks.copy()
             if 'Priority' not in df.columns:
                 df['Priority'] = 'Medium'
-            df['Due Date'] = pd.to_datetime(df['Due Date']).dt.date
+            # --- FIX: استخدام .dt.date للمطابقة ---
+            df['Due Date Only'] = df['Due Date'].dt.date
             
-            filtered = df[df['Due Date'] == picked_day]
+            filtered = df[df['Due Date Only'] == picked_day]
             
             if not filtered.empty:
                 st.markdown(f"""
-                    <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);  
                                 padding: 15px; border-radius: 10px; color: white; margin-bottom: 20px;'>
                         <h3 style='margin: 0; color: white;'>📋 {len(filtered)} Task(s) on {picked_day.strftime('%B %d, %Y')}</h3>
                     </div>
@@ -617,17 +631,17 @@ else:
                     
                     # كارد لكل شخص
                     st.markdown(f"""
-                        <div style='background: white; padding: 20px; border-radius: 15px; 
+                        <div style='background: white; padding: 20px; border-radius: 15px;  
                                     margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
                                     border-left: 5px solid #667eea;'>
                             <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;'>
                                 <h3 style='margin: 0; color: #667eea;'>👤 {owner}</h3>
                                 <div>
-                                    <span style='background: #e0e7ff; color: #667eea; padding: 5px 12px; 
+                                    <span style='background: #e0e7ff; color: #667eea; padding: 5px 12px;   
                                                  border-radius: 20px; font-size: 12px; font-weight: 600;'>
                                         {task_count} Task(s)
                                     </span>
-                                    <span style='background: #dcfce7; color: #16a34a; padding: 5px 12px; 
+                                    <span style='background: #dcfce7; color: #16a34a; padding: 5px 12px;   
                                                  border-radius: 20px; font-size: 12px; font-weight: 600; margin-left: 8px;'>
                                         {avg_progress:.0f}% Avg Progress
                                     </span>
@@ -648,17 +662,17 @@ else:
                         }.get(task['Status'], '#6b7280')
                         
                         st.markdown(f"""
-                            <div style='background: #f8fafc; padding: 18px; border-radius: 12px; 
+                            <div style='background: #f8fafc; padding: 18px; border-radius: 12px;  
                                         margin: 12px 0; border-left: 4px solid {priority_color};
                                         transition: all 0.3s;'>
                                 <div style='display: flex; justify-content: space-between; align-items: start;'>
                                     <div style='flex: 1;'>
                                         <div style='margin-bottom: 8px;'>
-                                            <span style='background: {priority_color}; color: white; padding: 3px 10px; 
+                                            <span style='background: {priority_color}; color: white; padding: 3px 10px;   
                                                          border-radius: 12px; font-size: 11px; font-weight: 600;'>
                                                 {task.get('Priority', 'Medium')}
                                             </span>
-                                            <span style='background: {status_color}; color: white; padding: 3px 10px; 
+                                            <span style='background: {status_color}; color: white; padding: 3px 10px;   
                                                          border-radius: 12px; font-size: 11px; font-weight: 600; margin-left: 6px;'>
                                                 {task['Status']}
                                             </span>
@@ -679,7 +693,7 @@ else:
                                 </div>
                                 <div style='margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0;'>
                                     <div style='background: #e2e8f0; height: 8px; border-radius: 10px; overflow: hidden;'>
-                                        <div style='background: {priority_color}; height: 100%; width: {task["Progress"]}%; 
+                                        <div style='background: {priority_color}; height: 100%; width: {task["Progress"]}%;   
                                                     transition: width 0.3s;'></div>
                                     </div>
                                 </div>
@@ -688,7 +702,7 @@ else:
                 
             else:
                 st.markdown("""
-                    <div style='background: white; padding: 40px; border-radius: 15px; 
+                    <div style='background: white; padding: 40px; border-radius: 15px;  
                                 text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.05);'>
                         <div style='font-size: 64px; margin-bottom: 15px;'>📭</div>
                         <h3 style='color: #64748b; margin: 0;'>No Tasks Scheduled</h3>
@@ -699,19 +713,19 @@ else:
             # عرض المهام القادمة
             st.markdown("---")
             st.markdown("#### 📌 Upcoming Deadlines")
-            upcoming = df[df['Due Date'] > picked_day].sort_values('Due Date').head(5)
+            upcoming = df[df['Due Date Only'] > picked_day].sort_values('Due Date').head(5)
             
             if not upcoming.empty:
                 for _, row in upcoming.iterrows():
-                    days_until = (row['Due Date'] - picked_day).days
+                    days_until = (row['Due Date Only'] - picked_day).days
                     priority_color = get_priority_color(row.get('Priority', 'Medium'))
                     
                     st.markdown(f"""
-                        <div style='background: white; padding: 12px; border-radius: 8px; 
+                        <div style='background: white; padding: 12px; border-radius: 8px;  
                                     margin: 8px 0; border-left: 3px solid {priority_color};'>
                             <strong style='color: {priority_color};'>{row['Item']}</strong><br>
                             <small style='color: #64748b;'>
-                                👤 {row['Owner']} • 📅 in {days_until} day(s) • {row['Due Date'].strftime('%b %d')}
+                                👤 {row['Owner']} • 📅 in {days_until} day(s) • {row['Due Date Only'].strftime('%b %d')}
                             </small>
                         </div>
                     """, unsafe_allow_html=True)
@@ -725,8 +739,6 @@ else:
         # التأكد من وجود جميع الأعمدة المطلوبة
         if 'Priority' not in df.columns:
             df['Priority'] = 'Medium'
-        
-        df['Due Date'] = pd.to_datetime(df['Due Date'])
         
         # Metrics Row
         m1, m2, m3, m4 = st.columns(4)
@@ -824,7 +836,7 @@ else:
         st.subheader("🗓️ Project Roadmap (Gantt Chart)")
         if len(df) > 0:
             df_gantt = df.copy()
-            df_gantt['Start'] = pd.to_datetime(date.today())
+            df_gantt['Start'] = pd.Timestamp(date.today())
             
             fig_gantt = px.timeline(
                 df_gantt,
@@ -926,21 +938,25 @@ else:
                 
                 if submitted:
                     if t_id and t_item:
-                        new_entry = {
-                            "ID": t_id,
-                            "Item": t_item,
-                            "Owner": t_owner,
-                            "Status": t_status,
-                            "Due Date": t_due,
-                            "Progress": t_prog,
-                            "Priority": t_priority
-                        }
-                        st.session_state.tasks = pd.concat(
-                            [st.session_state.tasks, pd.DataFrame([new_entry])],
-                            ignore_index=True
-                        )
-                        st.success(f"✅ Task '{t_item}' added successfully!")
-                        st.rerun()
+                        # --- FIX: التحقق من عدم تكرار الـ ID ---
+                        if t_id in st.session_state.tasks['ID'].values:
+                            st.error(f"⚠️ ID '{t_id}' already exists! Please use a unique ID.")
+                        else:
+                            new_entry = {
+                                "ID": t_id,
+                                "Item": t_item,
+                                "Owner": t_owner,
+                                "Status": t_status,
+                                "Due Date": pd.to_datetime(t_due), # تحويل للتاريخ الصحيح
+                                "Progress": t_prog,
+                                "Priority": t_priority
+                            }
+                            st.session_state.tasks = pd.concat(
+                                [st.session_state.tasks, pd.DataFrame([new_entry])],
+                                ignore_index=True
+                            )
+                            st.success(f"✅ Task '{t_item}' added successfully!")
+                            st.rerun()
                     else:
                         st.error("⚠️ Please fill in all required fields")
         
@@ -969,10 +985,11 @@ else:
                                                    index=["Pending", "In Progress", "Technical Evaluation", "Submitted", "Completed"].index(task_data['Status']))
                         with ey:
                             e_priority = st.selectbox("Priority", ["Low", "Medium", "High", "Critical"],
-                                                     index=["Low", "Medium", "High", "Critical"].index(task_data['Priority']))
+                                                   index=["Low", "Medium", "High", "Critical"].index(task_data['Priority']))
                             e_progress = st.slider("Progress %", 0, 100, int(task_data['Progress']), 5)
                         
-                        e_due = st.date_input("Due Date", value=pd.to_datetime(task_data['Due Date']).date())
+                        # --- FIX: التأكد من أن تاريخ التعديل محول بشكل صحيح ---
+                        e_due = st.date_input("Due Date", value=task_data['Due Date'].date())
                         
                         if st.form_submit_button("💾 Save Changes", use_container_width=True):
                             # تحديث المهمة
@@ -981,7 +998,9 @@ else:
                             st.session_state.tasks.at[idx, 'Status'] = e_status
                             st.session_state.tasks.at[idx, 'Priority'] = e_priority
                             st.session_state.tasks.at[idx, 'Progress'] = e_progress
-                            st.session_state.tasks.at[idx, 'Due Date'] = e_due
+                            # --- FIX: حفظ التاريخ كـ Timestamp ---
+                            st.session_state.tasks.at[idx, 'Due Date'] = pd.to_datetime(e_due)
+                            
                             st.success("✅ Task updated successfully!")
                             st.rerun()
             else:
@@ -1004,11 +1023,14 @@ else:
             })
             team_stats.columns = ['Owner', 'Total Tasks', 'Avg Progress']
             
+            # --- FIX: إنشاء Timestamp لليوم للمقارنة ---
+            today_ts = pd.Timestamp(date.today())
+            
             # عرض إحصائيات الفريق
             for _, member in team_stats.iterrows():
                 with st.container():
                     st.markdown(f"""
-                        <div style='background: white; padding: 20px; border-radius: 12px; 
+                        <div style='background: white; padding: 20px; border-radius: 12px;  
                                     margin: 10px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1);'>
                             <h3 style='margin: 0; color: #667eea;'>👤 {member['Owner']}</h3>
                         </div>
@@ -1020,10 +1042,10 @@ else:
                     
                     # حساب المهام المتأخرة
                     member_tasks = df_team[df_team['Owner'] == member['Owner']].copy()
-                    member_tasks['Due Date'] = pd.to_datetime(member_tasks['Due Date'])
                     
+                    # --- FIX: مقارنة Timestamp مع Timestamp ---
                     overdue = len(member_tasks[
-                        (member_tasks['Due Date'] < pd.Timestamp(date.today())) &
+                        (member_tasks['Due Date'] < today_ts) &
                         (member_tasks['Progress'] < 100)
                     ])
                     c3.metric("Overdue Tasks", overdue, delta="Needs attention" if overdue > 0 else "On track")
